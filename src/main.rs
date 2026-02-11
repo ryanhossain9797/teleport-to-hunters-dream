@@ -8,7 +8,7 @@ use std::fs;
 use std::path::PathBuf;
 
 const HUNTERS_DREAM_MAP_ID: [u8; 4] = [0x00, 0x00, 0x00, 0x15]; // Little-endian [21, 0]
-const HUNTERS_DREAM_COORDS: [f32; 3] = [-8.0, -6.0, -18.0];
+const HUNTERS_DREAM_COORDS: (f32, f32, f32) = (-8.0, -6.0, -18.0);
 const LCED_MARKER: [u8; 4] = [0x4C, 0x43, 0x45, 0x44];
 
 const COORD_PATTERN: [u8; 12] = [
@@ -110,38 +110,29 @@ fn main() {
     let args = Args::parse();
 
     println!("DEBUG: Reading file: {:?}", args.save_file);
-    let mut bytes = match read_file(&args.save_file) {
-        Ok(b) => {
-            println!("DEBUG: File size: {} bytes", b.len());
-            b
-        }
-        Err(e) => {
-            println!("Error: {}", e);
-            std::process::exit(1);
-        }
+    let Ok(mut bytes) = read_file(&args.save_file) else {
+        println!("Error: Failed to read file");
+        std::process::exit(1);
+    };
+    println!("DEBUG: File size: {} bytes", bytes.len());
+
+    let Some(lced_offset) = find_lced_marker(&bytes) else {
+        println!(
+            "\nError: Could not find LCED (0x4C 0x43 0x45 0x44) marker in save file.\n\
+            This may not be a valid decrypted Bloodborne save."
+        );
+        std::process::exit(1);
     };
 
-    let lced_offset = match find_lced_marker(&bytes) {
-        Some(offset) => offset,
-        None => {
-            println!("\nError: Could not find LCED marker in save file.");
-            println!("This may not be a valid decrypted Bloodborne save.");
-            println!("The save file should contain the bytes 'LCED' (0x4C 0x43 0x45 0x44).");
-            std::process::exit(1);
-        }
+    let Some(coord_offset) = find_coordinates_offset(&bytes, lced_offset) else {
+        println!(
+            "\nError: Could not find coordinate pattern [FF FF FF FF 00 00 00 00 00 00 00 00] after LCED marker.\n\
+            This may indicate the save file is corrupted or in an unexpected format."
+        );
+        std::process::exit(1);
     };
 
-    let coord_offset = match find_coordinates_offset(&bytes, lced_offset) {
-        Some(offset) => offset,
-        None => {
-            println!("\nError: Could not find coordinate pattern after LCED marker.");
-            println!("Expected pattern: [FF FF FF FF 00 00 00 00 00 00 00 00]");
-            println!("The save file may be corrupted or in an unexpected format.");
-            std::process::exit(1);
-        }
-    };
-
-    let Ok((old_x, old_y, old_z)) = read_coordinates(&bytes, coord_offset) else {
+    let Ok((x, y, z)) = read_coordinates(&bytes, coord_offset) else {
         println!(
             "Error: Failed to read coordinates from offset 0x{:X}",
             coord_offset
@@ -154,14 +145,14 @@ fn main() {
     println!("\nTeleporting to Hunter's Dream...");
     println!(
         "  From: X={:.3}, Y={:.3}, Z={:.3} (Map: {})",
-        old_x,
-        old_y,
-        old_z,
+        x,
+        y,
+        z,
         format_map_id(old_map_id)
     );
     println!(
         "  To Hunter's Dream:   X={:.3}, Y={:.3}, Z={:.3} (Map: 21)",
-        HUNTERS_DREAM_COORDS[0], HUNTERS_DREAM_COORDS[1], HUNTERS_DREAM_COORDS[2]
+        HUNTERS_DREAM_COORDS.0, HUNTERS_DREAM_COORDS.1, HUNTERS_DREAM_COORDS.2
     );
 
     write_map_id(&mut bytes, HUNTERS_DREAM_MAP_ID);
@@ -169,9 +160,9 @@ fn main() {
     write_coordinates(
         &mut bytes,
         coord_offset,
-        HUNTERS_DREAM_COORDS[0],
-        HUNTERS_DREAM_COORDS[1],
-        HUNTERS_DREAM_COORDS[2],
+        HUNTERS_DREAM_COORDS.0,
+        HUNTERS_DREAM_COORDS.1,
+        HUNTERS_DREAM_COORDS.2,
     );
 
     println!("DEBUG: Writing to file: {:?}", args.save_file);
