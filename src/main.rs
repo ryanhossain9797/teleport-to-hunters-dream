@@ -3,6 +3,7 @@
 //! Usage: bloodborne-teleport <save_file>
 
 use clap::Parser;
+use std::array::TryFromSliceError;
 use std::fs;
 use std::path::PathBuf;
 
@@ -14,11 +15,20 @@ const COORD_PATTERN: [u8; 12] = [
     0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 ];
 
+const COORD_OFFSET_AFTER_PATTERN: usize = 12;
+
 #[derive(Parser, Debug)]
-#[command(name = "bloodborne-teleport")]
-#[command(author, version, about, long_about = None)]
+#[command(
+    name = "teleport-to-hunters-dream",
+    author,
+    version,
+    about = "A minimal CLI tool to teleport to Hunter's Dream in Bloodborne save files",
+    long_about = "A minimal CLI tool to teleport to Hunter's Dream in Bloodborne save files.\n\n\
+                  This tool is meant to be run on userdata0000, userdata0001, etc. files \
+                  found in your Bloodborne save directory.\nuserdata0000 is your first character, userdata0001 is your second character, and so on."
+)]
 struct Args {
-    /// Path to the decrypted Bloodborne save file
+    /// Path to the save file (e.g., userdata0000, userdata0001)
     save_file: PathBuf,
 }
 
@@ -26,50 +36,47 @@ fn read_file(path: &PathBuf) -> Result<Vec<u8>, String> {
     fs::read(path).map_err(|e| format!("Failed to read file: {}", e))
 }
 
-/// Find the LCED marker in the file - this marks the section where coordinates are stored
 fn find_lced_marker(bytes: &[u8]) -> Option<usize> {
-    eprintln!("DEBUG: Searching for LCED marker (0x4C, 0x43, 0x45, 0x44)...");
+    println!("DEBUG: Searching for LCED marker (0x4C, 0x43, 0x45, 0x44)...");
     for i in 0..(bytes.len().saturating_sub(4)) {
         if bytes[i..i + 4] == LCED_MARKER {
-            eprintln!("DEBUG: Found LCED marker at offset 0x{:X} ({})", i, i);
+            println!("DEBUG: Found LCED marker at offset 0x{:X} ({})", i, i);
             return Some(i);
         }
     }
-    eprintln!("DEBUG: LCED marker not found");
+    println!("DEBUG: LCED marker not found");
     None
 }
 
-/// Find the coordinate pattern starting from the LCED offset
 fn find_coordinates_offset(bytes: &[u8], lced_offset: usize) -> Option<usize> {
-    eprintln!(
+    println!(
         "DEBUG: Searching for coordinate pattern starting from offset {}...",
         lced_offset
     );
     for i in lced_offset..(bytes.len().saturating_sub(COORD_PATTERN.len())) {
         if bytes[i..i + COORD_PATTERN.len()] == COORD_PATTERN {
-            // Coordinates start 12 bytes after the pattern
-            let coord_offset = i + 12;
-            eprintln!(
+            let coord_offset = i + COORD_OFFSET_AFTER_PATTERN;
+            println!(
                 "DEBUG: Found coordinate pattern at offset 0x{:X} ({}), coordinates at offset 0x{:X} ({})",
                 i, i, coord_offset, coord_offset
             );
             return Some(coord_offset);
         }
     }
-    eprintln!("DEBUG: Coordinate pattern not found after LCED marker");
+    println!("DEBUG: Coordinate pattern not found after LCED marker");
     None
 }
 
-fn read_coordinates(bytes: &[u8], offset: usize) -> (f32, f32, f32) {
-    let x_bytes: [u8; 4] = bytes[offset..offset + 4].try_into().unwrap();
-    let y_bytes: [u8; 4] = bytes[offset + 4..offset + 8].try_into().unwrap();
-    let z_bytes: [u8; 4] = bytes[offset + 8..offset + 12].try_into().unwrap();
+fn read_coordinates(bytes: &[u8], offset: usize) -> Result<(f32, f32, f32), TryFromSliceError> {
+    let x_bytes: [u8; 4] = bytes[offset..offset + 4].try_into()?;
+    let y_bytes: [u8; 4] = bytes[offset + 4..offset + 8].try_into()?;
+    let z_bytes: [u8; 4] = bytes[offset + 8..offset + 12].try_into()?;
 
     let x = f32::from_le_bytes(x_bytes);
     let y = f32::from_le_bytes(y_bytes);
     let z = f32::from_le_bytes(z_bytes);
 
-    (x, y, z)
+    Ok((x, y, z))
 }
 
 fn read_map_id(bytes: &[u8]) -> [u8; 4] {
@@ -77,7 +84,7 @@ fn read_map_id(bytes: &[u8]) -> [u8; 4] {
 }
 
 fn write_coordinates(bytes: &mut [u8], offset: usize, x: f32, y: f32, z: f32) {
-    eprintln!(
+    println!(
         "DEBUG: Writing coordinates at offset {}: X={}, Y={}, Z={}",
         offset, x, y, z
     );
@@ -87,7 +94,7 @@ fn write_coordinates(bytes: &mut [u8], offset: usize, x: f32, y: f32, z: f32) {
 }
 
 fn write_map_id(bytes: &mut [u8], map_id: [u8; 4]) {
-    eprintln!("DEBUG: Writing map ID at offset 0x04: {:?}", map_id);
+    println!("DEBUG: Writing map ID at offset 0x04: {:?}", map_id);
     bytes[0x04] = map_id[0];
     bytes[0x05] = map_id[1];
     bytes[0x06] = map_id[2];
@@ -102,41 +109,46 @@ fn format_map_id(map_id: [u8; 4]) -> String {
 fn main() {
     let args = Args::parse();
 
-    eprintln!("DEBUG: Reading file: {:?}", args.save_file);
+    println!("DEBUG: Reading file: {:?}", args.save_file);
     let mut bytes = match read_file(&args.save_file) {
         Ok(b) => {
-            eprintln!("DEBUG: File size: {} bytes", b.len());
+            println!("DEBUG: File size: {} bytes", b.len());
             b
         }
         Err(e) => {
-            eprintln!("Error: {}", e);
+            println!("Error: {}", e);
             std::process::exit(1);
         }
     };
 
-    // Step 1: Find LCED marker
     let lced_offset = match find_lced_marker(&bytes) {
         Some(offset) => offset,
         None => {
-            eprintln!("\nError: Could not find LCED marker in save file.");
-            eprintln!("This may not be a valid decrypted Bloodborne save.");
-            eprintln!("The save file should contain the bytes 'LCED' (0x4C 0x43 0x45 0x44).");
+            println!("\nError: Could not find LCED marker in save file.");
+            println!("This may not be a valid decrypted Bloodborne save.");
+            println!("The save file should contain the bytes 'LCED' (0x4C 0x43 0x45 0x44).");
             std::process::exit(1);
         }
     };
 
-    // Step 2: Find coordinate pattern after LCED marker
     let coord_offset = match find_coordinates_offset(&bytes, lced_offset) {
         Some(offset) => offset,
         None => {
-            eprintln!("\nError: Could not find coordinate pattern after LCED marker.");
-            eprintln!("Expected pattern: [FF FF FF FF 00 00 00 00 00 00 00 00]");
-            eprintln!("The save file may be corrupted or in an unexpected format.");
+            println!("\nError: Could not find coordinate pattern after LCED marker.");
+            println!("Expected pattern: [FF FF FF FF 00 00 00 00 00 00 00 00]");
+            println!("The save file may be corrupted or in an unexpected format.");
             std::process::exit(1);
         }
     };
 
-    let (old_x, old_y, old_z) = read_coordinates(&bytes, coord_offset);
+    let Ok((old_x, old_y, old_z)) = read_coordinates(&bytes, coord_offset) else {
+        println!(
+            "Error: Failed to read coordinates from offset 0x{:X}",
+            coord_offset
+        );
+        std::process::exit(1);
+    };
+
     let old_map_id = read_map_id(&bytes);
 
     println!("\nTeleporting to Hunter's Dream...");
@@ -162,9 +174,9 @@ fn main() {
         HUNTERS_DREAM_COORDS[2],
     );
 
-    eprintln!("DEBUG: Writing to file: {:?}", args.save_file);
+    println!("DEBUG: Writing to file: {:?}", args.save_file);
     if let Err(e) = fs::write(&args.save_file, &bytes) {
-        eprintln!("Error: Failed to write save file: {}", e);
+        println!("Error: Failed to write save file: {}", e);
         std::process::exit(1);
     }
 
