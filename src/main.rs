@@ -1,6 +1,6 @@
 //! A minimal CLI tool to teleport to Hunter's Dream in Bloodborne save files
 //!
-//! Usage: bloodborne-teleport <save_file>
+//! Usage: teleport-to-hunters-dream <save_file>
 
 use clap::Parser;
 use std::array::TryFromSliceError;

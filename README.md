@@ -5,7 +5,7 @@ A minimal command-line tool to teleport your character to Hunter's Dream in Bloo
 ## Usage
 
 ```bash
-bloodborne-teleport <save_file>
+teleport-to-hunters-dream <save_file>
 ```
 
 ### Arguments
@@ -49,11 +49,11 @@ The tool teleports the player to Hunter's Dream with the following fixed values:
 ## Building
 
 ```bash
-cd bloodborne-teleport
+cd teleport-to-hunters-dream
 cargo build --release
 ```
 
-The binary will be located at `bloodborne-teleport/target/release/bloodborne-teleport`.
+The binary will be located at `teleport-to-hunters-dream/target/release/teleport-to-hunters-dream`.
 
 ## Requirements
 
