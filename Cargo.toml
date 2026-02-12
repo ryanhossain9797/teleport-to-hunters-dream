@@ -1,5 +1,5 @@
 [package]
-name = "teleport-to-hunters-dream"
+name = "lantern-teleport"
 version = "0.1.0"
 edition = "2024"
 description = "A minimal CLI tool to teleport to Hunter's Dream in Bloodborne save files"

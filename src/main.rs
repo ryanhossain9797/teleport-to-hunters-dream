@@ -1,14 +1,14 @@
-//! A minimal CLI tool to teleport to Hunter's Dream in Bloodborne save files
+//! A minimal CLI tool to teleport to Lantern Teleport in Bloodborne save files
 //!
-//! Usage: teleport-to-hunters-dream <save_file>
+//! Usage: lantern-teleport <save_file>
 
 use clap::Parser;
 use std::array::TryFromSliceError;
 use std::fs;
 use std::path::PathBuf;
 
-const HUNTERS_DREAM_MAP_ID: [u8; 4] = [0x00, 0x00, 0x00, 0x15]; // Little-endian [21, 0]
-const HUNTERS_DREAM_COORDS: (f32, f32, f32) = (-8.0, -6.0, -18.0);
+const LANTERN_TELEPORT_MAP_ID: [u8; 4] = [0x00, 0x00, 0x00, 0x15]; // Little-endian [21, 0]
+const LANTERN_TELEPORT_COORDS: (f32, f32, f32) = (-8.0, -6.0, -18.0);
 const LCED_MARKER: [u8; 4] = [0x4C, 0x43, 0x45, 0x44];
 
 const COORD_PATTERN: [u8; 12] = [
@@ -19,11 +19,11 @@ const COORD_OFFSET_AFTER_PATTERN: usize = 12;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "teleport-to-hunters-dream",
+    name = "lantern-teleport",
     author,
     version,
-    about = "A minimal CLI tool to teleport to Hunter's Dream in Bloodborne save files",
-    long_about = "A minimal CLI tool to teleport to Hunter's Dream in Bloodborne save files.\n\n\
+    about = "A minimal CLI tool to teleport to any Lantern in Bloodborne save files",
+    long_about = "A minimal CLI tool to teleport to any Lantern in Bloodborne save files.\n\n\
                   This tool is meant to be run on userdata0000, userdata0001, etc. files \
                   found in your Bloodborne save directory.\nuserdata0000 is your first character, userdata0001 is your second character, and so on."
 )]
@@ -142,7 +142,7 @@ fn main() {
 
     let old_map_id = read_map_id(&bytes);
 
-    println!("\nTeleporting to Hunter's Dream...");
+    println!("\nTeleporting to Lantern Teleport...");
     println!(
         "  From: X={:.3}, Y={:.3}, Z={:.3} (Map: {})",
         x,
@@ -152,17 +152,17 @@ fn main() {
     );
     println!(
         "  To Hunter's Dream:   X={:.3}, Y={:.3}, Z={:.3} (Map: 21)",
-        HUNTERS_DREAM_COORDS.0, HUNTERS_DREAM_COORDS.1, HUNTERS_DREAM_COORDS.2
+        LANTERN_TELEPORT_COORDS.0, LANTERN_TELEPORT_COORDS.1, LANTERN_TELEPORT_COORDS.2
     );
 
-    write_map_id(&mut bytes, HUNTERS_DREAM_MAP_ID);
+    write_map_id(&mut bytes, LANTERN_TELEPORT_MAP_ID);
 
     write_coordinates(
         &mut bytes,
         coord_offset,
-        HUNTERS_DREAM_COORDS.0,
-        HUNTERS_DREAM_COORDS.1,
-        HUNTERS_DREAM_COORDS.2,
+        LANTERN_TELEPORT_COORDS.0,
+        LANTERN_TELEPORT_COORDS.1,
+        LANTERN_TELEPORT_COORDS.2,
     );
 
     println!("DEBUG: Writing to file: {:?}", args.save_file);
@@ -171,6 +171,6 @@ fn main() {
         std::process::exit(1);
     }
 
-    println!("\nSuccessfully teleported to Hunter's Dream!");
+    println!("\nSuccessfully teleported to Lantern Teleport!");
     println!("Save file updated: {:?}", args.save_file);
 }
