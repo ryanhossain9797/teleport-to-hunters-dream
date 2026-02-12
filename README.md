@@ -5,7 +5,7 @@ A minimal command-line tool to teleport your character to Hunter's Dream in Bloo
 ## Usage
 
 ```bash
-teleport-to-hunters-dream <save_file>
+lantern-teleport <save_file>
 ```
 
 ### Arguments
@@ -53,7 +53,7 @@ cd teleport-to-hunters-dream
 cargo build --release
 ```
 
-The binary will be located at `teleport-to-hunters-dream/target/release/teleport-to-hunters-dream`.
+The binary will be located at `lantern-teleport/target/release/lantern-teleport`.
 
 ## Requirements
 

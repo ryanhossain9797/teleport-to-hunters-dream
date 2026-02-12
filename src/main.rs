@@ -1,35 +1,40 @@
-//! A minimal CLI tool to teleport to Hunter's Dream in Bloodborne save files
+//! A CLI tool to teleport to Lantern Teleport in Bloodborne save files
 //!
-//! Usage: teleport-to-hunters-dream <save_file>
+//! Usage: lantern-teleport <save_file> [--location <LOCATION>]
 
 use clap::Parser;
 use std::array::TryFromSliceError;
 use std::fs;
 use std::path::PathBuf;
 
-const HUNTERS_DREAM_MAP_ID: [u8; 4] = [0x00, 0x00, 0x00, 0x15]; // Little-endian [21, 0]
-const HUNTERS_DREAM_COORDS: (f32, f32, f32) = (-8.0, -6.0, -18.0);
-const LCED_MARKER: [u8; 4] = [0x4C, 0x43, 0x45, 0x44];
+mod constants;
+mod types;
 
-const COORD_PATTERN: [u8; 12] = [
-    0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-];
-
-const COORD_OFFSET_AFTER_PATTERN: usize = 12;
+use constants::{COORD_OFFSET_AFTER_PATTERN, COORD_PATTERN, LCED_MARKER};
+use types::{LOCATIONS, Location, get_locations_by_region};
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "teleport-to-hunters-dream",
+    name = "lantern-teleport",
     author,
     version,
-    about = "A minimal CLI tool to teleport to Hunter's Dream in Bloodborne save files",
-    long_about = "A minimal CLI tool to teleport to Hunter's Dream in Bloodborne save files.\n\n\
+    about = "A CLI tool to teleport to any Lantern in Bloodborne save files",
+    long_about = "A CLI tool to teleport to any Lantern in Bloodborne save files.\n\n\
                   This tool is meant to be run on userdata0000, userdata0001, etc. files \
-                  found in your Bloodborne save directory.\nuserdata0000 is your first character, userdata0001 is your second character, and so on."
+                  found in your Bloodborne save directory.\
+                  userdata0000 is your first character, userdata0001 is your second character, and so on."
 )]
 struct Args {
     /// Path to the save file (e.g., userdata0000, userdata0001)
     save_file: PathBuf,
+
+    /// Teleport to a specific location (supports fuzzy matching)
+    #[arg(short, long)]
+    location: Option<String>,
+
+    /// List all available locations
+    #[arg(short, long)]
+    list: bool,
 }
 
 fn read_file(path: &PathBuf) -> Result<Vec<u8>, String> {
@@ -79,10 +84,6 @@ fn read_coordinates(bytes: &[u8], offset: usize) -> Result<(f32, f32, f32), TryF
     Ok((x, y, z))
 }
 
-fn read_map_id(bytes: &[u8]) -> [u8; 4] {
-    [bytes[0x04], bytes[0x05], bytes[0x06], bytes[0x07]]
-}
-
 fn write_coordinates(bytes: &mut [u8], offset: usize, x: f32, y: f32, z: f32) {
     println!(
         "DEBUG: Writing coordinates at offset {}: X={}, Y={}, Z={}",
@@ -101,13 +102,86 @@ fn write_map_id(bytes: &mut [u8], map_id: [u8; 4]) {
     bytes[0x07] = map_id[3];
 }
 
-fn format_map_id(map_id: [u8; 4]) -> String {
-    let id = u16::from_le_bytes([map_id[0], map_id[1]]);
-    format!("{}", id)
+fn find_location(query: &str) -> Option<&'static Location> {
+    let lower_query = query.to_lowercase();
+
+    // Try exact match (case-insensitive)
+    for loc in &LOCATIONS {
+        if loc.name.to_lowercase() == lower_query {
+            return Some(loc);
+        }
+    }
+
+    // Try partial match
+    for loc in &LOCATIONS {
+        if loc.name.to_lowercase().contains(&lower_query) {
+            return Some(loc);
+        }
+    }
+
+    None
+}
+
+fn list_locations() {
+    println!("\nAvailable teleport locations:");
+    println!("============================");
+
+    for (region, locations) in get_locations_by_region() {
+        println!("\n{}", region);
+        println!("----------------------------");
+        for location in locations {
+            println!(
+                "  - {} (X: {:.2}, Y: {:.2}, Z: {:.2})",
+                location.name, location.x, location.y, location.z
+            );
+        }
+    }
+
+    println!("\n============================");
+    println!(
+        "Total: {} locations across {} regions",
+        LOCATIONS.len(),
+        get_locations_by_region().len()
+    );
+}
+
+fn teleport_to_location(bytes: &mut [u8], coord_offset: usize, location: &Location) {
+    println!("\nTeleporting to {}...", location.name);
+
+    write_map_id(bytes, location.map_id);
+    write_coordinates(bytes, coord_offset, location.x, location.y, location.z);
 }
 
 fn main() {
     let args = Args::parse();
+
+    if args.list {
+        list_locations();
+        return;
+    }
+
+    let location = match &args.location {
+        Some(name) => match find_location(name) {
+            Some(loc) => loc,
+            None => {
+                println!(
+                    "Error: Unknown location '{}'\nUse --list to see available locations",
+                    name
+                );
+                std::process::exit(1);
+            }
+        },
+        None => {
+            // Default to HuntersDream if no location specified
+            println!("No location specified, defaulting to Hunter's Dream");
+            &LOCATIONS[0] // Hunter's Dream is first
+        }
+    };
+
+    println!(
+        "DEBUG: Selected location: {} (X: {:.2}, Y: {:.2}, Z: {:.2})",
+        location.name, location.x, location.y, location.z
+    );
 
     println!("DEBUG: Reading file: {:?}", args.save_file);
     let Ok(mut bytes) = read_file(&args.save_file) else {
@@ -132,7 +206,7 @@ fn main() {
         std::process::exit(1);
     };
 
-    let Ok((x, y, z)) = read_coordinates(&bytes, coord_offset) else {
+    let Ok(_) = read_coordinates(&bytes, coord_offset) else {
         println!(
             "Error: Failed to read coordinates from offset 0x{:X}",
             coord_offset
@@ -140,30 +214,7 @@ fn main() {
         std::process::exit(1);
     };
 
-    let old_map_id = read_map_id(&bytes);
-
-    println!("\nTeleporting to Hunter's Dream...");
-    println!(
-        "  From: X={:.3}, Y={:.3}, Z={:.3} (Map: {})",
-        x,
-        y,
-        z,
-        format_map_id(old_map_id)
-    );
-    println!(
-        "  To Hunter's Dream:   X={:.3}, Y={:.3}, Z={:.3} (Map: 21)",
-        HUNTERS_DREAM_COORDS.0, HUNTERS_DREAM_COORDS.1, HUNTERS_DREAM_COORDS.2
-    );
-
-    write_map_id(&mut bytes, HUNTERS_DREAM_MAP_ID);
-
-    write_coordinates(
-        &mut bytes,
-        coord_offset,
-        HUNTERS_DREAM_COORDS.0,
-        HUNTERS_DREAM_COORDS.1,
-        HUNTERS_DREAM_COORDS.2,
-    );
+    teleport_to_location(&mut bytes, coord_offset, location);
 
     println!("DEBUG: Writing to file: {:?}", args.save_file);
     if let Err(e) = fs::write(&args.save_file, &bytes) {
@@ -171,6 +222,6 @@ fn main() {
         std::process::exit(1);
     }
 
-    println!("\nSuccessfully teleported to Hunter's Dream!");
+    println!("\nSuccessfully teleported to {}!", location.name);
     println!("Save file updated: {:?}", args.save_file);
 }
