@@ -1,3 +1,5 @@
+use strum::{Display, EnumString};
+
 /// Represents a teleport destination in Bloodborne
 #[derive(Debug, Clone, PartialEq)]
 pub struct Location {
@@ -9,8 +11,10 @@ pub struct Location {
     pub map_id: [u8; 4],
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Two-way mapping between enum variants and their string representations
+#[derive(Debug, Clone, Copy, PartialEq, Display, EnumString)]
 pub enum LocationName {
+    #[strum(serialize = "Hunter's Dream")]
     HuntersDream,
 }
 

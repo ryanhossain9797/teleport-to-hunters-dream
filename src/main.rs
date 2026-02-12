@@ -84,10 +84,6 @@ fn read_coordinates(bytes: &[u8], offset: usize) -> Result<(f32, f32, f32), TryF
     Ok((x, y, z))
 }
 
-fn read_map_id(bytes: &[u8]) -> [u8; 4] {
-    [bytes[0x04], bytes[0x05], bytes[0x06], bytes[0x07]]
-}
-
 fn write_coordinates(bytes: &mut [u8], offset: usize, x: f32, y: f32, z: f32) {
     println!(
         "DEBUG: Writing coordinates at offset {}: X={}, Y={}, Z={}",
@@ -106,18 +102,8 @@ fn write_map_id(bytes: &mut [u8], map_id: [u8; 4]) {
     bytes[0x07] = map_id[3];
 }
 
-fn format_map_id(map_id: [u8; 4]) -> String {
-    let id = u16::from_le_bytes([map_id[0], map_id[1]]);
-    format!("{}", id)
-}
-
 fn get_location_by_name(name: &str) -> Option<LocationName> {
-    // For now, only HuntersDream is implemented
-    if name.to_lowercase().contains("hunter") || name.to_lowercase().contains("dream") {
-        Some(LocationName::HuntersDream)
-    } else {
-        None
-    }
+    name.parse().ok()
 }
 
 fn list_locations() {
@@ -132,30 +118,8 @@ fn list_locations() {
     println!("\nTotal: {} locations", LocationName::all().len());
 }
 
-fn teleport_to_location(
-    bytes: &mut [u8],
-    coord_offset: usize,
-    location: &Location,
-    current_x: f32,
-    current_y: f32,
-    current_z: f32,
-    current_map_id: [u8; 4],
-) {
+fn teleport_to_location(bytes: &mut [u8], coord_offset: usize, location: &Location) {
     println!("\nTeleporting to {}...", location.name);
-    println!(
-        "  From: X={:.3}, Y={:.3}, Z={:.3} (Map: {})",
-        current_x,
-        current_y,
-        current_z,
-        format_map_id(current_map_id)
-    );
-    println!(
-        "  To:   X={:.3}, Y={:.3}, Z={:.3} (Map: {})",
-        location.x,
-        location.y,
-        location.z,
-        format_map_id(location.map_id)
-    );
 
     write_map_id(bytes, location.map_id);
     write_coordinates(bytes, coord_offset, location.x, location.y, location.z);
@@ -164,19 +128,19 @@ fn teleport_to_location(
 fn main() {
     let args = Args::parse();
 
-    // Handle --list flag
     if args.list {
         list_locations();
         return;
     }
 
-    // Handle --location flag
     let location = match &args.location {
         Some(name) => match get_location_by_name(name) {
             Some(loc) => loc,
             None => {
-                println!("Error: Unknown location '{}'", name);
-                println!("Use --list to see available locations");
+                println!(
+                    "Error: Unknown location '{}'\nUse --list to see available locations",
+                    name
+                );
                 std::process::exit(1);
             }
         },
@@ -212,7 +176,7 @@ fn main() {
         std::process::exit(1);
     };
 
-    let Ok((x, y, z)) = read_coordinates(&bytes, coord_offset) else {
+    let Ok(_) = read_coordinates(&bytes, coord_offset) else {
         println!(
             "Error: Failed to read coordinates from offset 0x{:X}",
             coord_offset
@@ -220,17 +184,7 @@ fn main() {
         std::process::exit(1);
     };
 
-    let old_map_id = read_map_id(&bytes);
-
-    teleport_to_location(
-        &mut bytes,
-        coord_offset,
-        &location_data,
-        x,
-        y,
-        z,
-        old_map_id,
-    );
+    teleport_to_location(&mut bytes, coord_offset, &location_data);
 
     println!("DEBUG: Writing to file: {:?}", args.save_file);
     if let Err(e) = fs::write(&args.save_file, &bytes) {
