@@ -110,12 +110,24 @@ fn list_locations() {
     println!("\nAvailable teleport locations:");
     println!("============================");
 
-    for location_name in LocationName::all() {
-        let location = location_name.get_location();
-        println!("  - {} ({})", location.name, location.region);
+    for (region, locations) in LocationName::by_region() {
+        println!("\n{}", region);
+        println!("----------------------------");
+        for location_name in *locations {
+            let location = location_name.get_location();
+            println!(
+                "  - {} (X: {:.2}, Y: {:.2}, Z: {:.2})",
+                location.name, location.x, location.y, location.z
+            );
+        }
     }
 
-    println!("\nTotal: {} locations", LocationName::all().len());
+    println!("\n============================");
+    println!(
+        "Total: {} locations across {} regions",
+        LocationName::all().len(),
+        LocationName::by_region().len()
+    );
 }
 
 fn teleport_to_location(bytes: &mut [u8], coord_offset: usize, location: &Location) {
