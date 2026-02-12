@@ -11,7 +11,7 @@ mod constants;
 mod types;
 
 use constants::{COORD_OFFSET_AFTER_PATTERN, COORD_PATTERN, LCED_MARKER};
-use types::{Location, LocationName};
+use types::{LOCATIONS, Location, get_locations_by_region};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -21,14 +21,14 @@ use types::{Location, LocationName};
     about = "A CLI tool to teleport to any Lantern in Bloodborne save files",
     long_about = "A CLI tool to teleport to any Lantern in Bloodborne save files.\n\n\
                   This tool is meant to be run on userdata0000, userdata0001, etc. files \
-                  found in your Bloodborne save directory.\n\
+                  found in your Bloodborne save directory.\
                   userdata0000 is your first character, userdata0001 is your second character, and so on."
 )]
 struct Args {
     /// Path to the save file (e.g., userdata0000, userdata0001)
     save_file: PathBuf,
 
-    /// Teleport to a specific location (supports: "Hunter's Dream")
+    /// Teleport to a specific location (supports fuzzy matching)
     #[arg(short, long)]
     location: Option<String>,
 
@@ -102,19 +102,34 @@ fn write_map_id(bytes: &mut [u8], map_id: [u8; 4]) {
     bytes[0x07] = map_id[3];
 }
 
-fn get_location_by_name(name: &str) -> Option<LocationName> {
-    name.parse().ok()
+fn find_location(query: &str) -> Option<&'static Location> {
+    let lower_query = query.to_lowercase();
+
+    // Try exact match (case-insensitive)
+    for loc in &LOCATIONS {
+        if loc.name.to_lowercase() == lower_query {
+            return Some(loc);
+        }
+    }
+
+    // Try partial match
+    for loc in &LOCATIONS {
+        if loc.name.to_lowercase().contains(&lower_query) {
+            return Some(loc);
+        }
+    }
+
+    None
 }
 
 fn list_locations() {
     println!("\nAvailable teleport locations:");
     println!("============================");
 
-    for (region, locations) in LocationName::by_region() {
+    for (region, locations) in get_locations_by_region() {
         println!("\n{}", region);
         println!("----------------------------");
-        for location_name in *locations {
-            let location = location_name.get_location();
+        for location in locations {
             println!(
                 "  - {} (X: {:.2}, Y: {:.2}, Z: {:.2})",
                 location.name, location.x, location.y, location.z
@@ -125,8 +140,8 @@ fn list_locations() {
     println!("\n============================");
     println!(
         "Total: {} locations across {} regions",
-        LocationName::all().len(),
-        LocationName::by_region().len()
+        LOCATIONS.len(),
+        get_locations_by_region().len()
     );
 }
 
@@ -146,7 +161,7 @@ fn main() {
     }
 
     let location = match &args.location {
-        Some(name) => match get_location_by_name(name) {
+        Some(name) => match find_location(name) {
             Some(loc) => loc,
             None => {
                 println!(
@@ -159,11 +174,14 @@ fn main() {
         None => {
             // Default to HuntersDream if no location specified
             println!("No location specified, defaulting to Hunter's Dream");
-            LocationName::HuntersDream
+            &LOCATIONS[0] // Hunter's Dream is first
         }
     };
 
-    let location_data = location.get_location();
+    println!(
+        "DEBUG: Selected location: {} (X: {:.2}, Y: {:.2}, Z: {:.2})",
+        location.name, location.x, location.y, location.z
+    );
 
     println!("DEBUG: Reading file: {:?}", args.save_file);
     let Ok(mut bytes) = read_file(&args.save_file) else {
@@ -196,7 +214,7 @@ fn main() {
         std::process::exit(1);
     };
 
-    teleport_to_location(&mut bytes, coord_offset, &location_data);
+    teleport_to_location(&mut bytes, coord_offset, location);
 
     println!("DEBUG: Writing to file: {:?}", args.save_file);
     if let Err(e) = fs::write(&args.save_file, &bytes) {
@@ -204,6 +222,6 @@ fn main() {
         std::process::exit(1);
     }
 
-    println!("\nSuccessfully teleported to {}!", location_data.name);
+    println!("\nSuccessfully teleported to {}!", location.name);
     println!("Save file updated: {:?}", args.save_file);
 }
