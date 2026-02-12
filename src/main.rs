@@ -148,7 +148,7 @@ fn list_locations() {
 fn teleport_to_location(bytes: &mut [u8], coord_offset: usize, location: &Location) {
     println!("\nTeleporting to {}...", location.name);
 
-    write_map_id(bytes, location.map_id);
+    write_map_id(bytes, [0x00, 0x00, location.map_id[0], location.map_id[1]]);
     write_coordinates(bytes, coord_offset, location.x, location.y, location.z);
 }
 
@@ -160,8 +160,9 @@ fn main() {
         return;
     }
 
-    let location = match &args.location {
-        Some(name) => match find_location(name) {
+    let location = &args
+        .location
+        .map(|name| match find_location(&name) {
             Some(loc) => loc,
             None => {
                 println!(
@@ -170,13 +171,8 @@ fn main() {
                 );
                 std::process::exit(1);
             }
-        },
-        None => {
-            // Default to HuntersDream if no location specified
-            println!("No location specified, defaulting to Hunter's Dream");
-            &LOCATIONS[0] // Hunter's Dream is first
-        }
-    };
+        })
+        .unwrap_or_else(|| &LOCATIONS[0]);
 
     println!(
         "DEBUG: Selected location: {} (X: {:.2}, Y: {:.2}, Z: {:.2})",
