@@ -1,0 +1,15 @@
+[package]
+name = "lantern-teleport-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "CLI tool for lantern teleport functionality"
+
+[dependencies]
+lantern-teleport-core = { path = "../lantern-teleport-core" }
+clap = { version = "4.5", features = ["derive"] }
+
+[[bin]]
+name = "lantern-teleport"
+path = "src/main.rs"

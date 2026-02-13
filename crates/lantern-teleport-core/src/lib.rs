@@ -1,17 +1,81 @@
-use crate::constants::map_ids;
+//! Core library for lantern teleport functionality
+//!
+//! This library provides functions to work with Bloodborne lantern teleport locations.
+
+use std::fs;
+use std::path::Path;
 
 /// Represents a teleport destination in Bloodborne
 #[derive(Debug, Clone, PartialEq)]
 pub struct Location {
+    /// Display name of the location
     pub name: &'static str,
+    /// Region where this location belongs
     pub region: &'static str,
+    /// X coordinate
     pub x: f32,
+    /// Y coordinate
     pub y: f32,
+    /// Z coordinate
     pub z: f32,
+    /// Map ID as a 2-byte array
     pub map_id: [u8; 2],
 }
 
-/// All available teleport locations
+// ============================================================================
+// Private constants - internal use only
+// ============================================================================
+
+const LCED_MARKER: [u8; 4] = [0x4C, 0x43, 0x45, 0x44]; // "LCED"
+
+const COORD_PATTERN: [u8; 12] = [
+    0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+];
+
+const COORD_OFFSET_AFTER_PATTERN: usize = 12;
+
+mod map_ids {
+
+    // Hunter's Dream
+    pub const HUNTERS_DREAM: [u8; 2] = [0x00, 0x15];
+
+    // Yharnam Headstone
+    pub const CENTRAL_YHARNAM_1: [u8; 2] = [0x01, 0x18];
+    pub const CENTRAL_YHARNAM_0: [u8; 2] = [0x00, 0x18];
+    pub const CENTRAL_YHARNAM_2: [u8; 2] = [0x02, 0x18];
+    pub const OLD_YHARNAM_0: [u8; 2] = [0x00, 0x17];
+
+    // Frontier Headstone
+    pub const HEMWICK_0: [u8; 2] = [0x00, 0x16];
+    pub const FORBIDDEN_WOODS_0: [u8; 2] = [0x00, 0x1B];
+    pub const BYRGENWERTH_0: [u8; 2] = [0x00, 0x20];
+    pub const BYRGENWERTH_2: [u8; 2] = [0x02, 0x20];
+
+    // Unseen Headstone
+    pub const YAHARGUL_0: [u8; 2] = [0x00, 0x1C];
+    pub const CAINHURST_0: [u8; 2] = [0x00, 0x19];
+    pub const ABANDONED_WORKSHOP_1: [u8; 2] = [0x01, 0x15];
+
+    // Nightmare Headstone
+    pub const NIGHTMARE_FRONTIER_0: [u8; 2] = [0x00, 0x21];
+    pub const MERGOS_LOFT_0: [u8; 2] = [0x00, 0x1A];
+
+    // Hunter's Nightmare Headstone
+    pub const HUNTERS_NIGHTMARE_0: [u8; 2] = [0x00, 0x22];
+    pub const RESEARCH_HALL_0: [u8; 2] = [0x00, 0x23];
+    pub const FISHING_HAMLET_0: [u8; 2] = [0x00, 0x24];
+
+    /// Convert a map ID to the 4-byte format used in save files
+    pub fn to_save_format(map_id: &[u8; 2]) -> [u8; 4] {
+        [0x00, 0x00, map_id[1], map_id[0]]
+    }
+}
+
+// ============================================================================
+// Location data - all available teleport locations
+// ============================================================================
+
+/// All available lantern teleport locations
 pub const LOCATIONS: [Location; 44] = [
     // Hunter's Dream
     Location {
@@ -373,18 +437,126 @@ pub const LOCATIONS: [Location; 44] = [
     },
 ];
 
-/// Get locations grouped by region
-pub fn get_locations_by_region() -> Vec<(&'static str, Vec<&'static Location>)> {
-    let mut regions: Vec<(&'static str, Vec<&'static Location>)> = Vec::new();
-    for location in &LOCATIONS {
-        if let Some(existing) = regions
-            .iter_mut()
-            .find(|(name, _)| *name == location.region)
-        {
-            existing.1.push(location);
-        } else {
-            regions.push((location.region, vec![location]));
+// ============================================================================
+// Public API
+// ============================================================================
+
+/// Get a reference to all available lantern locations.
+///
+/// Returns a fixed-size slice of all teleport locations.
+#[inline]
+pub fn get_all_locations() -> &'static [Location] {
+    &LOCATIONS
+}
+
+/// Search for locations matching the given query string.
+///
+/// The search is case-insensitive and performs partial matching against location names.
+///
+/// # Arguments
+///
+/// * `query` - The search string to match against location names
+///
+/// # Returns
+///
+/// A vector of references to all locations that match the query
+pub fn search_locations(query: &str) -> Vec<&'static Location> {
+    let lower_query = query.to_lowercase();
+    LOCATIONS
+        .iter()
+        .filter(|loc| loc.name.to_lowercase().contains(&lower_query))
+        .collect()
+}
+
+/// Error type for teleport operations
+#[derive(Debug)]
+pub enum TeleportError {
+    /// Failed to read the save file
+    ReadError(String),
+    /// Failed to write the save file
+    WriteError(String),
+    /// Could not find LCED marker in save file
+    LcedMarkerNotFound,
+    /// Could not find coordinate pattern in save file
+    CoordPatternNotFound,
+    /// Invalid coordinate offset
+    InvalidOffset,
+}
+
+/// Teleport to the specified location in a Bloodborne save file.
+///
+/// This function modifies the save file at the given path to teleport
+/// the character to the specified location.
+///
+/// # Arguments
+///
+/// * `save_path` - Path to the Bloodborne save file
+/// * `location` - The destination location
+///
+/// # Returns
+///
+/// `Ok(())` on success, or a `TeleportError` if the operation fails
+pub fn teleport<P: AsRef<Path>>(save_path: P, location: &Location) -> Result<(), TeleportError> {
+    // Read the save file
+    let path = save_path.as_ref();
+    let mut bytes = fs::read(path).map_err(|e| TeleportError::ReadError(e.to_string()))?;
+
+    // Find LCED marker
+    let lced_offset = find_lced_marker(&bytes).ok_or(TeleportError::LcedMarkerNotFound)?;
+
+    // Find coordinates offset
+    let coord_offset =
+        find_coordinates_offset(&bytes, lced_offset).ok_or(TeleportError::CoordPatternNotFound)?;
+
+    // Write the new coordinates and map ID
+    write_map_id(&mut bytes, location);
+    write_coordinates(&mut bytes, coord_offset, location);
+
+    // Write the modified save file back
+    fs::write(path, &bytes).map_err(|e| TeleportError::WriteError(e.to_string()))?;
+
+    Ok(())
+}
+
+// ============================================================================
+// Private helper functions
+// ============================================================================
+
+#[inline]
+fn find_lced_marker(bytes: &[u8]) -> Option<usize> {
+    for i in 0..(bytes.len().saturating_sub(4)) {
+        if bytes[i..i + 4] == LCED_MARKER {
+            return Some(i);
         }
     }
-    regions
+    None
+}
+
+#[inline]
+fn find_coordinates_offset(bytes: &[u8], lced_offset: usize) -> Option<usize> {
+    let search_start = lced_offset;
+    let search_end = bytes.len().saturating_sub(COORD_PATTERN.len());
+
+    for i in search_start..search_end {
+        if bytes[i..i + COORD_PATTERN.len()] == COORD_PATTERN {
+            return Some(i + COORD_OFFSET_AFTER_PATTERN);
+        }
+    }
+    None
+}
+
+#[inline]
+fn write_coordinates(bytes: &mut [u8], offset: usize, location: &Location) {
+    bytes[offset..offset + 4].copy_from_slice(&f32::to_le_bytes(location.x));
+    bytes[offset + 4..offset + 8].copy_from_slice(&f32::to_le_bytes(location.y));
+    bytes[offset + 8..offset + 12].copy_from_slice(&f32::to_le_bytes(location.z));
+}
+
+#[inline]
+fn write_map_id(bytes: &mut [u8], location: &Location) {
+    let save_format = map_ids::to_save_format(&location.map_id);
+    bytes[0x04] = save_format[0];
+    bytes[0x05] = save_format[1];
+    bytes[0x06] = save_format[2];
+    bytes[0x07] = save_format[3];
 }
