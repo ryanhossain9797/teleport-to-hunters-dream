@@ -1,12 +1,12 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "crates/lantern-teleport-core",
     "crates/lantern-teleport-cli",
 ]
 
 [workspace.package]
-version = "0.1.0"
-edition = "2021"
+version = "0.1.2"
+edition = "2024"
 license = "MIT"
 authors = ["lantern-teleport contributors"]

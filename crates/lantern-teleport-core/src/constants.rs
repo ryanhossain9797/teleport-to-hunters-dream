@@ -47,7 +47,7 @@ pub(crate) mod map_ids {
 
     /// Convert a map ID to the 4-byte format used in save files
     pub fn to_save_format(map_id: &[u8; 2]) -> [u8; 4] {
-        [0x00, 0x00, map_id[1], map_id[0]]
+        [0x00, 0x00, map_id[0], map_id[1]]
     }
 }
 
