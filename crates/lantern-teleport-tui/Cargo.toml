@@ -1,0 +1,16 @@
+[package]
+name = "lantern-teleport-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "TUI tool for lantern teleport functionality"
+
+[dependencies]
+lantern-teleport-core = { path = "../lantern-teleport-core" }
+ratatui = "0.30"
+crossterm = "0.29"
+
+[[bin]]
+name = "lantern-teleport-tui"
+path = "src/main.rs"
