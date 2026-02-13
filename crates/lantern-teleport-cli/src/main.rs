@@ -23,7 +23,7 @@ struct Args {
     save_file: Option<PathBuf>,
 
     /// Teleport to a specific location (supports fuzzy matching)
-    #[arg(num_args = 0..=1, last = true)]
+    #[arg(short, long)]
     location: Option<String>,
 
     /// List all available locations
