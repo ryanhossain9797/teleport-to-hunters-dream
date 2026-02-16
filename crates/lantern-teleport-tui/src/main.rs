@@ -11,16 +11,12 @@ use std::time::Duration;
 use crossterm::{
     event::DisableMouseCapture,
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 
 use app::{App, AppMode};
-use event::{
-    is_backspace_key, is_down_key, is_enter_key, is_escape_key, is_left_key, is_printable_char,
-    is_quit_key, is_right_key, is_search_key, is_up_key,
-};
-use event::{EventHandler, TerminalEvent};
+use event::{EventHandler, KeyAction, TerminalEvent};
 
 fn main() -> std::io::Result<()> {
     // Setup terminal
@@ -67,27 +63,26 @@ fn run_app(
         // Handle events
         match events.next()? {
             TerminalEvent::Key(key) => {
+                // Convert to KeyAction
+                let action = KeyAction::from_key_event(key);
+
                 // Global quit handler
-                if is_quit_key(key) {
+                if matches!(action, Some(KeyAction::Quit)) {
                     app.quit();
                 }
 
                 // Mode-specific handlers
                 match &app.mode {
-                    AppMode::FileBrowser => handle_file_browser_input(app, key),
-                    AppMode::Validating => {
-                        // Validation happens automatically, just wait
-                    }
-                    AppMode::ValidationSuccess(_) => handle_validation_success_input(app, key),
-                    AppMode::ValidationError(_) => handle_validation_error_input(app, key),
-                    AppMode::LocationSelection => handle_location_selection_input(app, key),
-                    AppMode::LocationSearch => handle_location_search_input(app, key),
-                    AppMode::Confirmation(_) => handle_confirmation_input(app, key),
-                    AppMode::Teleporting => {
-                        // Teleport happens automatically, just wait
-                    }
-                    AppMode::TeleportSuccess => handle_teleport_success_input(app, key),
-                    AppMode::TeleportError(_) => handle_teleport_error_input(app, key),
+                    AppMode::FileBrowser => handle_file_browser_input(app, action),
+                    AppMode::Validating => {}
+                    AppMode::ValidationSuccess(_) => handle_validation_success_input(app, action),
+                    AppMode::ValidationError(_) => handle_validation_error_input(app, action),
+                    AppMode::LocationSelection => handle_location_selection_input(app, action),
+                    AppMode::LocationSearch => handle_location_search_input(app, action),
+                    AppMode::Confirmation => handle_confirmation_input(app, action),
+                    AppMode::Teleporting => {}
+                    AppMode::TeleportSuccess => handle_teleport_success_input(app, action),
+                    AppMode::TeleportError(_) => handle_teleport_error_input(app, action),
                 }
             }
             TerminalEvent::Resize(_, _) => {
@@ -123,7 +118,7 @@ fn render_frame(f: &mut ratatui::Frame, app: &App) {
         AppMode::ValidationSuccess(position) => ui::render_validation_success(f, app, position),
         AppMode::ValidationError(error) => ui::render_validation_error(f, error),
         AppMode::LocationSelection | AppMode::LocationSearch => ui::render_location_list(f, app),
-        AppMode::Confirmation(_) => ui::render_confirmation(f, app),
+        AppMode::Confirmation => ui::render_confirmation(f, app),
         AppMode::Teleporting => {
             render_loading(f, "Teleporting...");
         }
@@ -153,87 +148,89 @@ fn render_loading(f: &mut ratatui::Frame, message: &str) {
 
 // Input handlers for each mode
 
-fn handle_file_browser_input(app: &mut App, key: crossterm::event::KeyEvent) {
-    if is_up_key(key) {
-        app.move_file_up();
-    } else if is_down_key(key) {
-        app.move_file_down();
-    } else if is_enter_key(key) {
-        app.navigate_to_selected();
+fn handle_file_browser_input(app: &mut App, action: Option<KeyAction>) {
+    match action {
+        Some(KeyAction::Up) => app.move_file_up(),
+        Some(KeyAction::Down) => app.move_file_down(),
+        Some(KeyAction::Enter) => app.navigate_to_selected(),
+        _ => {}
     }
 }
 
-fn handle_validation_success_input(app: &mut App, key: crossterm::event::KeyEvent) {
-    if is_enter_key(key) {
-        app.mode = AppMode::LocationSelection;
-    } else if is_escape_key(key) {
-        app.go_back_to_file_browser();
+fn handle_validation_success_input(app: &mut App, action: Option<KeyAction>) {
+    match action {
+        Some(KeyAction::Enter) => app.mode = AppMode::LocationSelection,
+        Some(KeyAction::Escape) => app.go_back_to_file_browser(),
+        _ => {}
     }
 }
 
-fn handle_validation_error_input(app: &mut App, key: crossterm::event::KeyEvent) {
-    if is_enter_key(key) || is_escape_key(key) {
-        app.go_back_to_file_browser();
+fn handle_validation_error_input(app: &mut App, action: Option<KeyAction>) {
+    match action {
+        Some(KeyAction::Enter) | Some(KeyAction::Escape) => app.go_back_to_file_browser(),
+        _ => {}
     }
 }
 
-fn handle_location_selection_input(app: &mut App, key: crossterm::event::KeyEvent) {
-    if is_up_key(key) {
-        app.move_location_up();
-    } else if is_down_key(key) {
-        app.move_location_down();
-    } else if is_enter_key(key) {
-        app.select_location();
-    } else if is_escape_key(key) {
-        app.go_back_to_file_browser();
-    } else if is_search_key(key) {
-        app.mode = AppMode::LocationSearch;
+fn handle_location_selection_input(app: &mut App, action: Option<KeyAction>) {
+    match action {
+        Some(KeyAction::Up) => app.move_location_up(),
+        Some(KeyAction::Down) => app.move_location_down(),
+        Some(KeyAction::Enter) => app.select_location(),
+        Some(KeyAction::Escape) => app.go_back_to_file_browser(),
+        Some(KeyAction::Search) => app.mode = AppMode::LocationSearch,
+        _ => {}
     }
 }
 
-fn handle_location_search_input(app: &mut App, key: crossterm::event::KeyEvent) {
-    if is_enter_key(key) {
-        // Exit search mode but keep the filter
-        app.mode = AppMode::LocationSelection;
-    } else if is_escape_key(key) {
-        app.clear_search();
-    } else if is_backspace_key(key) {
-        app.search_query.pop();
-        app.apply_search_filter();
-    } else if let Some(c) = is_printable_char(key) {
-        app.search_query.push(c);
-        app.apply_search_filter();
-    } else if is_up_key(key) {
-        app.move_location_up();
-    } else if is_down_key(key) {
-        app.move_location_down();
+fn handle_location_search_input(app: &mut App, action: Option<KeyAction>) {
+    match action {
+        Some(KeyAction::Enter) => {
+            // Exit search mode but keep the filter
+            app.mode = AppMode::LocationSelection;
+        }
+        Some(KeyAction::Escape) => app.clear_search(),
+        Some(KeyAction::Backspace) => {
+            app.search_query.pop();
+            app.apply_search_filter();
+        }
+        Some(KeyAction::Char(c)) => {
+            app.search_query.push(c);
+            app.apply_search_filter();
+        }
+        Some(KeyAction::Up) => app.move_location_up(),
+        Some(KeyAction::Down) => app.move_location_down(),
+        _ => {}
     }
 }
 
-fn handle_confirmation_input(app: &mut App, key: crossterm::event::KeyEvent) {
-    if is_left_key(key) {
-        app.move_confirm_left();
-    } else if is_right_key(key) {
-        app.move_confirm_right();
-    } else if is_enter_key(key) {
-        app.mode = AppMode::Teleporting;
-    } else if is_escape_key(key) {
-        app.mode = AppMode::LocationSelection;
+fn handle_confirmation_input(app: &mut App, action: Option<KeyAction>) {
+    match action {
+        Some(KeyAction::Left) => app.move_confirm_left(),
+        Some(KeyAction::Right) => app.move_confirm_right(),
+        Some(KeyAction::Enter) => app.mode = AppMode::Teleporting,
+        Some(KeyAction::Escape) => app.mode = AppMode::LocationSelection,
+        _ => {}
     }
 }
 
-fn handle_teleport_success_input(app: &mut App, key: crossterm::event::KeyEvent) {
-    if is_enter_key(key) {
-        // Go back to location selection for another teleport
-        app.mode = AppMode::LocationSelection;
-        app.selected_destination = None;
-    } else if is_escape_key(key) {
-        app.go_back_to_file_browser();
+fn handle_teleport_success_input(app: &mut App, action: Option<KeyAction>) {
+    match action {
+        Some(KeyAction::Enter) => {
+            // Go back to location selection for another teleport
+            app.mode = AppMode::LocationSelection;
+            app.selected_destination = None;
+        }
+        Some(KeyAction::Escape) => app.go_back_to_file_browser(),
+        _ => {}
     }
 }
 
-fn handle_teleport_error_input(app: &mut App, key: crossterm::event::KeyEvent) {
-    if is_enter_key(key) || is_escape_key(key) {
-        app.mode = AppMode::LocationSelection;
+fn handle_teleport_error_input(app: &mut App, action: Option<KeyAction>) {
+    match action {
+        Some(KeyAction::Enter) | Some(KeyAction::Escape) => {
+            app.mode = AppMode::LocationSelection;
+        }
+        _ => {}
     }
 }
