@@ -22,7 +22,7 @@ cargo build --release
 ```
 
 Binaries will be located at:
-- CLI: `target/release/lantern-teleport`
+- CLI: `target/release/lantern-teleport-cli`
 - TUI: `target/release/lantern-teleport-tui`
 
 ## Usage
@@ -58,13 +58,13 @@ For quick operations or scripting:
 
 ```bash
 # Teleport to Hunter's Dream (default)
-lantern-teleport path/to/userdata00XX
+lantern-teleport-cli path/to/userdata00XX
 
 # Teleport to a specific location
-lantern-teleport path/to/userdata00XX --location "Central Yharnam"
+lantern-teleport-cli path/to/userdata00XX --location "Central Yharnam"
 
 # List all available locations
-lantern-teleport --list
+lantern-teleport-cli --list
 ```
 
 #### CLI Arguments
@@ -181,4 +181,4 @@ lantern_teleport/
 
 ## License
 
-This project is licensed under the [MIT License](./LICENSE).
+This project is licensed under the [GPL-3.0 License](./LICENSE).

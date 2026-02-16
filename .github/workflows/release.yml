@@ -37,15 +37,15 @@ jobs:
       - name: Build
         run: |
           if [ "${{ matrix.cross }}" = "true" ]; then
-            cross build --release --target ${{ matrix.target }} -p lantern-teleport-cli
+            cross build --release --target ${{ matrix.target }} -p lantern-teleport-cli -p lantern-teleport-tui
           else
-            cargo build --release --target ${{ matrix.target }} -p lantern-teleport-cli
+            cargo build --release --target ${{ matrix.target }} -p lantern-teleport-cli -p lantern-teleport-tui
           fi
 
       - name: Prepare binary
         run: |
           cd target/${{ matrix.target }}/release
-          tar -czvf ../../../lantern-teleport-${{ matrix.target }}.tar.gz lantern-teleport
+          tar -czvf ../../../lantern-teleport-${{ matrix.target }}.tar.gz lantern-teleport-cli lantern-teleport-tui
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -73,12 +73,12 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }} -p lantern-teleport-cli
+        run: cargo build --release --target ${{ matrix.target }} -p lantern-teleport-cli -p lantern-teleport-tui
 
       - name: Prepare binary
         run: |
           cd target/${{ matrix.target }}/release
-          Compress-Archive -Path lantern-teleport.exe -DestinationPath ../../../lantern-teleport-${{ matrix.target }}.zip
+          Compress-Archive -Path lantern-teleport-cli.exe,lantern-teleport-tui.exe -DestinationPath ../../../lantern-teleport-${{ matrix.target }}.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
