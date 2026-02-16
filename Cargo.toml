@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/lantern-teleport-core",
     "crates/lantern-teleport-cli",
+    "crates/lantern-teleport-tui",
 ]
 
 [workspace.package]

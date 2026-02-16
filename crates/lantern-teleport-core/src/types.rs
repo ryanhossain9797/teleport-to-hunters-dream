@@ -17,6 +17,19 @@ pub struct Location {
     pub map_id: [u8; 2],
 }
 
+/// Current position in the game world extracted from a save file
+#[derive(Debug, Clone, PartialEq)]
+pub struct CurrentPosition {
+    /// X coordinate
+    pub x: f32,
+    /// Y coordinate
+    pub y: f32,
+    /// Z coordinate
+    pub z: f32,
+    /// Map ID as a 4-byte array (save file format)
+    pub map_id: [u8; 4],
+}
+
 /// Error type for teleport operations
 #[derive(Debug)]
 pub enum TeleportError {

@@ -13,7 +13,7 @@ mod constants;
 mod types;
 
 // Re-export public types
-pub use types::{Location, TeleportError};
+pub use types::{CurrentPosition, Location, TeleportError};
 
 // Re-export public constants
 pub use constants::LOCATIONS;
@@ -82,6 +82,54 @@ pub fn teleport<P: AsRef<Path>>(save_path: P, location: &Location) -> Result<(),
     fs::write(path, &bytes).map_err(|e| TeleportError::WriteError(e.to_string()))?;
 
     Ok(())
+}
+
+/// Validate a save file and extract the current position.
+///
+/// This function reads a Bloodborne save file and validates that it contains
+/// the expected data structures (LCED marker and coordinate pattern).
+///
+/// # Arguments
+///
+/// * `save_path` - Path to the Bloodborne save file
+///
+/// # Returns
+///
+/// `Ok(CurrentPosition)` with the current coordinates and map ID if valid,
+/// or a `TeleportError` if the file is invalid or cannot be read.
+pub fn validate_save_file<P: AsRef<Path>>(save_path: P) -> Result<CurrentPosition, TeleportError> {
+    // Read the save file
+    let path = save_path.as_ref();
+    let bytes = fs::read(path).map_err(|e| TeleportError::ReadError(e.to_string()))?;
+
+    // Find LCED marker
+    let lced_offset = find_lced_marker(&bytes).ok_or(TeleportError::LcedMarkerNotFound)?;
+
+    // Find coordinates offset
+    let coord_offset =
+        find_coordinates_offset(&bytes, lced_offset).ok_or(TeleportError::CoordPatternNotFound)?;
+
+    // Extract current position
+    let x = f32::from_le_bytes(
+        bytes[coord_offset..coord_offset + 4]
+            .try_into()
+            .map_err(|_| TeleportError::InvalidOffset)?,
+    );
+    let y = f32::from_le_bytes(
+        bytes[coord_offset + 4..coord_offset + 8]
+            .try_into()
+            .map_err(|_| TeleportError::InvalidOffset)?,
+    );
+    let z = f32::from_le_bytes(
+        bytes[coord_offset + 8..coord_offset + 12]
+            .try_into()
+            .map_err(|_| TeleportError::InvalidOffset)?,
+    );
+    let map_id: [u8; 4] = bytes[0x04..0x08]
+        .try_into()
+        .map_err(|_| TeleportError::InvalidOffset)?;
+
+    Ok(CurrentPosition { x, y, z, map_id })
 }
 
 // ============================================================================

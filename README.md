@@ -1,16 +1,139 @@
-# Bloodborne Teleport CLI
+# Bloodborne Lantern Teleport
 
-A minimal command-line tool to teleport your character to Hunter's Dream in Bloodborne save files.
+A tool to teleport your character to **any Lantern location** in Bloodborne save files. Available as both a **CLI** and an **interactive TUI** (Terminal User Interface).
+
+## Features
+
+- **Teleport to Any Lantern** - Choose from 44 lantern locations across all regions, including DLC areas
+- **Interactive TUI** - Full terminal user interface with file browser, location search, and confirmation dialogs
+- **CLI Support** - Command-line interface for quick operations or scripting
+- **Save File Validation** - Validates save files before modification
+- **Search & Filter** - Quickly find locations with fuzzy search (TUI)
+- **Safe Operation** - Shows confirmation before modifying save files
+
+## Installation
+
+### From Source
+
+```bash
+git clone https://github.com/your-repo/lantern-teleport.git
+cd lantern-teleport
+cargo build --release
+```
+
+Binaries will be located at:
+- CLI: `target/release/lantern-teleport`
+- TUI: `target/release/lantern-teleport-tui`
 
 ## Usage
 
+### TUI (Recommended)
+
+The TUI provides an interactive interface for browsing to your save file and selecting a destination:
+
 ```bash
-lantern-teleport <save_file>
+lantern-teleport-tui
 ```
 
-### Arguments
+**TUI Features:**
+- File browser to navigate to your save file
+- Automatic validation of save files
+- Locations grouped by region
+- Search/filter locations by name (press `/`)
+- Confirmation dialog before teleporting
 
-- `<save_file>` - Path to your decrypted Bloodborne save file
+**Key Bindings:**
+| Key | Action |
+|-----|--------|
+| `↑`/`k` | Move up |
+| `↓`/`j` | Move down |
+| `Enter` | Select/Confirm |
+| `Escape` | Go back/Cancel |
+| `/` | Activate search |
+| `q` | Quit |
+
+### CLI
+
+For quick operations or scripting:
+
+```bash
+# Teleport to Hunter's Dream (default)
+lantern-teleport path/to/userdata00XX
+
+# Teleport to a specific location
+lantern-teleport path/to/userdata00XX --location "Central Yharnam"
+
+# List all available locations
+lantern-teleport --list
+```
+
+#### CLI Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<save_file>` | Path to your decrypted Bloodborne save file |
+| `-l`, `--location <NAME>` | Destination location (supports fuzzy matching) |
+| `--list` | List all available locations |
+
+## Available Locations
+
+The tool supports 44 lantern locations across 6 regions:
+
+### Hunter's Dream
+- Hunter's Dream
+
+### Yharnam Headstone
+- 1st Floor Sickroom
+- Central Yharnam
+- Great Bridge
+- Tomb of Oedon
+- Cathedral Ward
+- Grand Cathedral Ward
+- Upper Cathedral Ward
+- Lumenflower Gardens
+- Altar of Despair
+- Old Yharnam
+- Church of the Good Chalice
+- Graveyard of the Darkbeast
+
+### Frontier Headstone
+- Hemwick Charnel Lane
+- Witch's Abode
+- Forbidden Woods
+- Forbidden Grave
+- Byrgenwerth
+- Moonside Lake
+
+### Unseen Headstone
+- Yahar'gul, Unseen Village
+- Yahar'gul Chapel
+- Advent Plaza
+- Hypogean Gaol
+- Forsaken Castle Cainhurst
+- Logarius' Seat
+- Vileblood Queen's Chamber
+- Abandoned Old Workshop
+
+### Nightmare Headstone
+- Lecture Building
+- Lecture Building 2nd Floor
+- Nightmare Frontier
+- Nightmare of Mensis
+- Mergo's Loft: Base
+- Mergo's Loft: Middle
+- Wet Nurse's Lunarium
+
+### Hunter's Nightmare Headstone (DLC)
+- Hunter's Nightmare
+- Nightmare Church
+- Nightmare Grand Cathedral
+- Underground Corpse Pile
+- Research Hall
+- Lumenwood Garden
+- Astral Clocktower
+- Fishing Hamlet
+- Lighthouse Hut
+- Coast
 
 ## How It Works
 
@@ -26,46 +149,36 @@ Offset +0x14 to +0x17: Z coordinate (f32 little-endian)
 Offset +0x04 to +0x07: Map ID (u16 little-endian)
 ```
 
-### Teleport Destination
-
-The tool teleports the player to Hunter's Dream with the following fixed values:
-
-| Property | Value |
-|----------|-------|
-| Map ID | 21 |
-| X | -8.0 |
-| Y | -6.0 |
-| Z | -18.0 |
-
 ### Process Flow
 
-1. **Parse Arguments** - CLI arguments are parsed using `clap` crate
-2. **Read Save File** - Load the entire save file into memory
-3. **Find LCED Pattern** - Search for the 12-byte signature that marks player position data
-4. **Read Current Position** - Extract current coordinates and map ID for display
-5. **Write New Position** - Replace coordinates and map ID with Hunter's Dream values
-6. **Save File** - Write modified bytes back to disk
-
-## Building
-
-```bash
-cd teleport-to-hunters-dream
-cargo build --release
-```
-
-The binary will be located at `lantern-teleport/target/release/lantern-teleport`.
+1. **Select Save File** - Browse and select your save file (TUI) or provide path (CLI)
+2. **Validate** - Verify the file contains valid Bloodborne save data
+3. **Select Destination** - Choose a lantern location
+4. **Confirm** - Review and confirm the teleport operation
+5. **Teleport** - Write new coordinates and map ID to the save file
 
 ## Requirements
 
 - Decrypted Bloodborne save file (not the original encrypted PS4 save)
-- Rust toolchain (for building)
+- Rust toolchain (for building from source)
 
 ## Warning
 
-- Always backup your save file before using this tool
+- **Always backup your save file before using this tool**
 - This tool modifies your save file in place
 - Use only with decrypted save files from properly converted games
 
+## Project Structure
+
+```
+lantern_teleport/
+├── crates/
+│   ├── lantern-teleport-core/    # Core library
+│   ├── lantern-teleport-cli/     # CLI application
+│   └── lantern-teleport-tui/     # TUI application
+└── Cargo.toml                    # Workspace configuration
+```
+
 ## License
 
-This project is licensed under the [GPL-3.0 License](./LICENSE).
+This project is licensed under the [MIT License](./LICENSE).
